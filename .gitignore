@@ -1,0 +1,14 @@
+# 环境
+.venv-qlib/
+__pycache__/
+*.pyc
+
+# 第三方仓库（独立 git 仓库，不嵌套）
+repos/
+
+# 实验产物（可再生成，体积大）
+mlruns/
+*.tar.gz
+
+# 原始运行日志（保留整理后的 .md 记录）
+*.log
