@@ -7,4 +7,4 @@
 ## 后续的实验计划（TODO）：实现一个用 pairwise ranking loss / 加权 IC loss 的模型，在同区间同策略下对比 IC 差异
 
 
-[text](reports/model-comparison.md)
+![/model_comparison_curves.png](reports/model_comparison_curves.png)
