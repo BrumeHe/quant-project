@@ -14,44 +14,66 @@
 | 评估 | IC/ICIR/Rank IC/Rank ICIR + 含费/不含费超额收益 |
 | 配置 | `configs/workflow_config_{lightgbm,doubleensemble,mlp,gru}_Alpha158_smoke.yaml` |
 
-## 结果
+# 模型对比实验报告（qlib / Alpha158 / csi300）
 
-信号质量（test 2020）：
+> 数据源：社区 chenditc/investment_data（qlib 官方数据集已停用）。
+> 所有实验同一股票池（csi300）、同一调仓策略（TopkDropout topk=50, n_drop=5）、同一手续费（买 0.05% / 卖 0.15% / 最低 5 元）、同一 label（T+1 买 T+2 卖收益）。
 
-| 模型 | 类型 | IC | ICIR | Rank IC | Rank ICIR |
-| --- | --- | --- | --- | --- | --- |
-| MLP | 深度（表格） | **0.0382** | **0.2957** | 0.0404 | 0.3209 |
-| DoubleEnsemble | 集成（LGBM 基座） | 0.0363 | 0.2954 | **0.0434** | **0.3335** |
-| LightGBM | GBDT | 0.0266 | 0.2161 | 0.0342 | 0.2694 |
-| GRU | 深度（时序） | 0.0052 | 0.0358 | 0.0316 | 0.2251 |
+## 1. 实验设计（两轮，区间明示）
 
-组合回测（2020 全年，沪深300 基准年化 26.0% / 最大回撤 -17.2%）：
-
-| 模型 | 超额年化（不含费） | 超额年化（含费） | IR（含费） | 超额 MDD（含费） |
+| 轮次 | 目的 | train | valid | test |
 | --- | --- | --- | --- | --- |
-| LightGBM | **+10.98%** | **+6.19%** | **0.73** | **-3.94%** |
-| DoubleEnsemble | +8.03% | +3.29% | 0.37 | -4.97% |
-| MLP | +3.69% | -1.03% | -0.12 | -6.22% |
-| GRU | -6.18% | -10.94% | -1.55 | -12.28% |
+| 小区间轮（smoke） | 链路验证 + 控制变量对比 | 2014-01 ~ 2018-12 | 2019 | 2020 |
+| 完整区间轮（full，对齐官方） | 对齐官方 benchmark 的完整复现 | 2008-01 ~ 2014-12 | 2015 ~ 2016 | 2017-01 ~ 2020-08 |
 
-![累计收益对比](model_comparison_curves.png)
+## 2. 小区间轮结果（test=2020）
 
-## 关键发现
+| 模型 | IC | ICIR | Rank IC | Rank ICIR | 超额年化(含费) | 信息比率(含费) | 超额最大回撤(含费) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| LightGBM | 0.0266 | 0.2161 | 0.0342 | 0.2694 | 6.19% | 0.7306 | -3.94% |
+| MLP | 0.0382 | 0.2957 | 0.0404 | 0.3209 | -1.03% | -0.1220 | -6.22% |
+| DoubleEnsemble | 0.0363 | 0.2954 | 0.0434 | 0.3335 | 3.29% | 0.3731 | -4.97% |
+| GRU | 0.0052 | 0.0358 | 0.0316 | 0.2251 | -10.94% | -1.5468 | -12.28% |
 
-1. **信号指标与实盘口径脱节**：MLP 和 DoubleEnsemble 的 IC/Rank IC 都优于 LightGBM，但含费超额收益排序完全反过来（LightGBM > DE > MLP > GRU）。信号准不等于赚钱——TopkDropout 每日换仓 5 只，信号日间稳定性差的模型换手成本更高，费用把信号优势吃掉了。
-2. **GRU 欠训练**：early stopping 显示 best score 出现在 epoch 1，第 11 轮即停止。学习率 2e-4 偏保守 + 训练区间缩短到 5 年（官方配置为 7 年），模型没有充分拟合。
-3. **深度模型不是不行，是结构要匹配**：同为 PyTorch 深度模型，表格结构的 MLP（IC 0.038）远好于时序结构的 GRU（IC 0.005）。Alpha158 已经是人工设计好的截面因子，时序卷积/递归结构没有额外信息可挖。
-4. **集成方法稳健**：DoubleEnsemble 在所有信号指标上稳定前三，验证了「样本重加权 + 特征选择」对低信噪比金融数据的价值。
-5. 与官方 benchmark 的相对排序一致（树模型/集成强于时序深度），绝对值低于官方值（缩区间所致），对比只在同条件内部有效。
+![小区间累计超额收益](figures/cum_excess_smoke.png)
 
-## 局限与下一步
+## 3. 完整区间轮结果（test=2017-01 ~ 2020-08）
 
-- 训练区间比官方 benchmark 短（5 年 vs 7 年），不能与官方公布值直接对比。
-- GRU 未调参；MLP 的换手/成本敏感性可以用 `report_normal_1day.pkl` 里的 turnover 字段进一步验证。
-- 下一步可做：恢复完整区间重跑、GRU 调 lr 逃出 epoch-1 早停、对比各模型换手率、Alpha360 数据集上的深度模型（时序模型的真正主场）。
+| 模型 | IC | ICIR | Rank IC | Rank ICIR | 超额年化(含费) | 信息比率(含费) | 超额最大回撤(含费) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| LightGBM | 0.0470 | 0.3816 | 0.0487 | 0.4057 | 11.06% | 1.3051 | -8.58% |
+| MLP | 0.0354 | 0.2768 | 0.0427 | 0.3354 | 5.25% | 0.6642 | -10.74% |
+| DoubleEnsemble | 0.0540 | 0.4289 | 0.0511 | 0.4141 | 12.86% | 1.4358 | -8.39% |
 
-## 产物清单
+官方 benchmark 对照（同 Alpha158 / csi300 / test 区间）：
 
-- 配置：`quant-sprint/configs/workflow_config_*_smoke.yaml`（4 份）
-- 曲线图：`quant-sprint/reports/model_comparison_curves.png`
-- 绘图脚本：`quant-sprint/scripts/plot_model_comparison.py`
+| 模型 | 官方 IC | 本轮 IC | 偏差 | 官方 Rank IC | 本轮 Rank IC | 偏差 |
+| --- | --- | --- | --- | --- | --- | --- |
+| LightGBM | 0.0448 | 0.0470 | +0.0022 | 0.0469 | 0.0487 | +0.0018 |
+| MLP | 0.0376 | 0.0354 | -0.0022 | 0.0429 | 0.0427 | -0.0002 |
+| DoubleEnsemble | 0.0521 | 0.0540 | +0.0019 | 0.0502 | 0.0511 | +0.0009 |
+
+![完整区间累计超额收益](figures/cum_excess_full.png)
+
+## 4. 两层结论
+
+### 4.1 小区间轮 vs 官方：不可比，也不用比
+
+- 时间段不同：train/valid/test 完全不同，IC 是「模型 × 市场环境」的联合结果，不是模型固有属性。
+- 小区间轮的价值在于链路验证与同区间内的控制变量对比，不作为复现对照。
+- 附带发现（regime 敏感性）：LightGBM / DoubleEnsemble 的 IC 跨区间波动约 0.02，MLP 跨区间最稳（0.0382 vs 0.0354）——树模型对训练区间市场环境的敏感度高于简单神经网络。
+
+### 4.2 完整区间轮 vs 官方：复现成功
+
+- 同配置同区间下，IC 偏差在千分位量级（±0.002），模型排序与官方一致（DoubleEnsemble > LightGBM > MLP）。
+- 偏差来源：① 数据源不同（官方数据集停用，社区数据复权/清洗/成分股快照口径不同）；② 官方表格本身是含随机性模型 20 次运行的均值 ± 标准差；③ 依赖库版本（LightGBM 4.7 / numpy 2.2）；④ GPU/cuDNN 非确定性。
+- GRU 完整区间轮因笔记本内存限制（16GB）暂未跑出结果，smoke 区间结果见第 2 节；后续可用 kernels=2 单独补跑。
+
+## 5. 复现命令
+
+```bash
+# 小区间轮
+MLFLOW_ALLOW_FILE_STORE=true .venv-qlib/Scripts/qrun.exe configs/workflow_config_<model>_Alpha158_smoke.yaml
+# 完整区间轮
+MLFLOW_ALLOW_FILE_STORE=true .venv-qlib/Scripts/qrun.exe configs/full/workflow_config_<model>_Alpha158_full.yaml
+```
